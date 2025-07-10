@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>绘本生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            
+            background: linear-gradient(to right, #e0f2f7, #e8f5e9); /* 浅蓝色到浅绿色过渡 */
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        input[type="file"], select { /* 样式也适用于 select */
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            background-color: #fff; /* 确保下拉框背景是白色 */
+        }
+        input[type="submit"] {
+            width: 100%;
+            padding: 12px 20px;
+            background-color: #28a745; /* 绿色按钮 */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        input[type="submit"]:disabled { /* 禁用状态的样式 */
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .instructions {
+            background-color: #e9f5ee;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 25px;
+            color: #366a36;
+            line-height: 1.6;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #218838;
+        }
+        .instructions ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .flash-messages {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+        .flash-messages li {
+            background-color: #ffe0b2; /* 橙色背景，警告 */
+            color: #e65100; /* 深橙色文字 */
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        #loading_status { /* 加载状态文字样式 */
+            text-align: center;
+            margin-top: 15px;
+            font-size: 1.1em;
+            color: #007bff; /* 蓝色 */
+            font-weight: bold;
+            display: none; /* 默认隐藏 */
+        }
+        .download-link { /* 示例文件下载链接的样式 */
+            display: inline-block;
+            margin-left: 10px;
+            color: #007bff;
+            text-decoration: underline;
+        }
+        .download-link:hover {
+            color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>绘本生成器</h1>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <ul class="flash-messages">
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endwith %}
+
+        <form id="storybook_form" action="{{ url_for('generate_storybook') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="csv_file">上传 CSV 数据文件：</label>
+                <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+            </div>
+            <div class="form-group">
+                <label for="image_files">上传图片文件（根据CSV行数，按顺序选择所有图片）：</label>
+                <input type="file" id="image_files" name="image_files" accept="image/png, image/jpeg, image/gif" multiple required>
+            </div>
+            
+            <div class="form-group">
+                <label for="font_style">选择字体：</label>
+                <select id="font_style" name="font_style">
+                    <option value="msyh">STHeiti Light (STHeiti Light.ttc)</option>
+                    <option value="simsun">PingFang (PingFang.ttc)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="color_theme">选择颜色主题：</label>
+                <select id="color_theme" name="color_theme">
+                    <option value="eye_friendly">护眼绿 (推荐)</option>
+                    <option value="classic_white">经典白</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="layout_style">选择布局：</label>
+                <select id="layout_style" name="layout_style">
+                    <option value="image_top_text_bottom">图片在上，文字在下</option>
+                    <option value="image_left_text_right">图片居左，文字居右</option>
+                </select>
+            </div>
+            <input type="submit" id="submit_button" value="生成绘本PDF">
+            <div id="loading_status">正在生成绘本PDF，请稍候...</div>
+        </form>
+
+        <div class="instructions">
+            <h3>使用说明：</h3>
+            <ul>
+                <li>**CSV文件格式：** 文件应为纯文本，**无标题行**，每行包含一个单词和一个短句，中间用**分号 `;` 分隔**。请确保使用 **UTF-8 编码**保存。
+                    <br>例如：`苹果;每天一个苹果，医生远离我。`
+                    <a href="{{ url_for('download_example_csv') }}" class="download-link" target="_blank">下载示例 CSV</a>
+                </li>
+                <li>**图片文件：**
+                    <ul>
+                        <li>请上传与CSV文件行数**对应数量**的图片。</li>
+                        <li>程序将按照您上传的**顺序**将图片命名为 `1.png`、`2.png` 等，并与CSV数据行一一对应。</li>
+                        <li>**单张图片大小限制：** 建议不超过 5MB。</li>
+                        <li>**所有文件总大小限制：** 上传的CSV文件和所有图片的总大小不能超过 50MB。</li>
+                    </ul>
+                </li>
+                <!--<li>**字体支持：** 请确保 `fonts/` 目录下有 `msyh.ttf` (微软雅黑) 和 `simsun.ttc` (宋体) 字体文件，以便正确显示中文。</li>-->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('storybook_form').addEventListener('submit', function(event) {
+            const submitButton = document.getElementById('submit_button');
+            const loadingStatus = document.getElementById('loading_status');
+
+            submitButton.disabled = true;
+            submitButton.value = "正在处理中...";
+            loadingStatus.style.display = 'block';
+        });
+
+        window.onload = function() {
+            const submitButton = document.getElementById('submit_button');
+            const loadingStatus = document.getElementById('loading_status');
+            submitButton.disabled = false;
+            submitButton.value = "生成绘本PDF";
+            loadingStatus.style.display = 'none';
+        };
+    </script>
+</body>
+</html>
